@@ -1,0 +1,428 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  CheckCircle2, 
+  Circle, 
+  Calendar, 
+  Clock, 
+  Zap, 
+  Shield, 
+  Flame, 
+  Settings, 
+  ChevronRight,
+  Info,
+  Trophy,
+  RefreshCw,
+  Star,
+  ExternalLink,
+  Copy,
+  Users,
+  Crown,
+  Swords,
+  Gem,
+  Ghost
+} from 'lucide-react';
+
+const APP_ID = 'di-minmax-2026-v4';
+
+const App = () => {
+  const [completedTasks, setCompletedTasks] = useState({});
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [activeTab, setActiveTab] = useState('daily');
+  const [faction, setFaction] = useState('shadows'); 
+  const [copyFeedback, setCopyFeedback] = useState(false);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(APP_ID);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.tasks) setCompletedTasks(parsed.tasks);
+        if (parsed.faction) setFaction(parsed.faction);
+      } catch (e) {
+        console.error("Failed to load progress", e);
+      }
+    }
+  }, []);
+
+  // Timer update and auto-reset logic
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now);
+      checkAndResetTasks(now);
+    }, 60000); 
+    return () => clearInterval(timer);
+  }, [completedTasks]);
+
+  const checkAndResetTasks = (now) => {
+    const lastResetStr = completedTasks.lastResetDate;
+    const lastReset = lastResetStr ? new Date(lastResetStr) : new Date(0);
+    
+    const resetHour = 3;
+    const todayReset = new Date(now);
+    todayReset.setHours(resetHour, 0, 0, 0);
+    if (now.getHours() < resetHour) {
+      todayReset.setDate(todayReset.getDate() - 1);
+    }
+
+    if (lastReset < todayReset) {
+      const newTasks = { ...completedTasks, lastResetDate: now.toISOString() };
+      
+      Object.keys(newTasks).forEach(key => {
+        if (key.startsWith('daily_')) delete newTasks[key];
+      });
+
+      if (now.getDay() === 1 && lastReset.getDay() !== 1) {
+        Object.keys(newTasks).forEach(key => { if (key.startsWith('weekly_')) delete newTasks[key]; });
+      }
+
+      if ((now.getDay() === 1 || now.getDay() === 4) && lastReset.getDay() !== now.getDay()) {
+        Object.keys(newTasks).forEach(key => { if (key.startsWith('semi_')) delete newTasks[key]; });
+      }
+
+      if (now.getDate() === 1 && lastReset.getDate() !== 1) {
+        Object.keys(newTasks).forEach(key => { if (key.startsWith('monthly_')) delete newTasks[key]; });
+      }
+
+      setCompletedTasks(newTasks);
+      saveToStorage(newTasks, faction);
+    }
+  };
+
+  const saveToStorage = (tasks, currentFaction) => {
+    localStorage.setItem(APP_ID, JSON.stringify({
+      tasks: tasks,
+      faction: currentFaction
+    }));
+  };
+
+  const toggleTask = (taskId) => {
+    const newTasks = {
+      ...completedTasks,
+      [taskId]: !completedTasks[taskId],
+      lastResetDate: completedTasks.lastResetDate || new Date().toISOString()
+    };
+    setCompletedTasks(newTasks);
+    saveToStorage(newTasks, faction);
+  };
+
+  const switchFaction = (newFaction) => {
+    setFaction(newFaction);
+    saveToStorage(completedTasks, newFaction);
+  };
+
+  const handleCopyCode = (e, code) => {
+    e.stopPropagation();
+    const el = document.createElement('textarea');
+    el.value = code;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 2000);
+  };
+
+  // Task Definitions
+  const sharedTasks = {
+    daily: [
+      { id: 'daily_shop_chest', title: 'Free Daily Reward Chest', desc: 'Shop -> Bundles', icon: <Star className="w-4 h-4 text-yellow-400" />, isSpecial: true, code: "IMMORTAL2026", link: "https://shop.battle.net/family/diablo-immortal" },
+      { id: 'daily_battleground', title: 'Battleground (PvP)', desc: '8am, 12pm, 6pm, 10pm Slots', icon: <Swords className="w-4 h-4 text-orange-400" /> },
+      { id: 'daily_rare_crest', title: 'Free Rare Crest', desc: 'Elder Rift entrance', icon: <Flame className="w-4 h-4 text-orange-500" /> },
+      { id: 'daily_bounties', title: '8 Bounties', desc: 'Stack up to 24 (3 days)', icon: <Shield className="w-4 h-4 text-blue-400" /> },
+      { id: 'daily_iben_fahd', title: "Iben Fahd's Sanctum", desc: 'Open 1st room chests', icon: <Settings className="w-4 h-4 text-gray-400" /> },
+      { id: 'daily_hilt_trader', title: 'Hilt Trader (Daily)', desc: '2x Reset per day', icon: <Trophy className="w-4 h-4 text-amber-500" /> },
+    ],
+    weekly: [
+      { id: 'semi_helliquary', title: 'Helliquary Raids', desc: 'Resets Mon & Thu', icon: <Flame className="w-4 h-4 text-red-500" /> },
+      { id: 'weekly_hidden_lair', title: '21 Hidden Lairs', desc: 'Normal Gems cap', icon: <Shield className="w-4 h-4 text-blue-500" /> },
+    ],
+    monthly: [
+      { id: 'monthly_leg_crest', title: 'Hilt Trader: Leg Crest', desc: '1600 Hilts', icon: <Star className="w-4 h-4 text-yellow-400" /> },
+    ]
+  };
+
+  const factionSpecific = {
+    shadows: {
+      daily: [
+        { id: 'daily_shadow_contract', title: 'Shadow Contract', desc: 'Bartender Bailey', icon: <Shield className="w-4 h-4 text-red-500" /> },
+        { id: 'daily_assembly', title: 'Assembly', desc: 'Mon-Sat 6PM-8PM', icon: <RefreshCw className="w-4 h-4 text-blue-500" /> },
+        { id: 'daily_raid_vault', title: 'Raid the Vault', desc: '12PM-1PM or 7PM-8PM', icon: <Trophy className="w-4 h-4 text-purple-500" /> },
+      ],
+      weekly: [
+        { id: 'weekly_path_blood', title: 'Path of Blood', desc: 'Push highest floor', icon: <Flame className="w-4 h-4 text-red-400" /> },
+        { id: 'weekly_shadow_war', title: 'Shadow War', desc: 'Thu/Sat nights', icon: <Users className="w-4 h-4 text-orange-400" /> },
+      ],
+      monthly: []
+    },
+    immortals: {
+      daily: [
+        { id: 'daily_immortal_daily', title: 'Immortal Daily Goals', desc: '9/9 Goals for Sigils', icon: <Crown className="w-4 h-4 text-yellow-500" /> },
+        { id: 'daily_defend_vault', title: 'Defend the Vault', desc: 'Kill Shadow intruders', icon: <Shield className="w-4 h-4 text-blue-500" /> },
+        { id: 'daily_kion_request', title: 'Request Kion’s Ordeal', desc: 'Check with Lieutenant', icon: <Flame className="w-4 h-4 text-orange-500" /> },
+      ],
+      weekly: [
+        { id: 'weekly_kions_ordeal', title: 'Kion’s Ordeal Raid', desc: 'Elite raid for rewards', icon: <Crown className="w-4 h-4 text-yellow-400" /> },
+        { id: 'weekly_corvus_expedition', title: 'Corvus Expedition', desc: 'Clan coordinated run', icon: <Users className="w-4 h-4 text-blue-400" /> },
+      ],
+      monthly: []
+    }
+  };
+
+  const activeTasksList = useMemo(() => {
+    const list = [...(sharedTasks[activeTab] || [])];
+    const factionTasks = factionSpecific[faction][activeTab] || [];
+    return [...list, ...factionTasks];
+  }, [activeTab, faction]);
+
+  const calendarEvents = [
+    { date: '2026-02-23', title: 'Druid Class Release', type: 'Update', color: 'bg-green-600' },
+    { date: '2026-03-05', title: 'Diablo 30th Anniversary', type: 'Event', color: 'bg-red-600' },
+    { date: '2026-03-11', title: 'Shattered Wilds', type: 'Event', color: 'bg-blue-600' },
+  ];
+
+  const getResetTimeLeft = () => {
+    const now = new Date();
+    let reset = new Date();
+    reset.setHours(3, 0, 0, 0);
+    if (now.getHours() >= 3) reset.setDate(reset.getDate() + 1);
+    const diff = reset - now;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${mins}m`;
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 font-sans max-w-5xl mx-auto">
+      {/* Feedback Toast */}
+      {copyFeedback && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-2 rounded-full shadow-2xl text-sm font-bold animate-bounce">
+          Code Copied to Clipboard!
+        </div>
+      )}
+
+      {/* Header Section */}
+      <div className="mb-8 border-b border-slate-800 pb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
+              IMMORTAL TRACKER
+            </h1>
+            <div className="flex items-center gap-4 mt-2">
+              <p className="text-slate-500 text-xs flex items-center gap-1 font-mono uppercase tracking-widest">
+                <Clock className="w-3 h-3" /> {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+              <span className="w-1 h-1 bg-slate-800 rounded-full"></span>
+              <p className="text-orange-500 text-xs font-bold uppercase tracking-widest flex items-center gap-1">
+                Reset in {getResetTimeLeft()}
+              </p>
+            </div>
+          </div>
+
+          {/* Faction Switcher */}
+          <div className="flex p-1 bg-slate-900 rounded-2xl border border-slate-800 w-full md:w-80 shadow-inner">
+            <button 
+              onClick={() => switchFaction('shadows')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all ${
+                faction === 'shadows' 
+                  ? 'bg-red-600 text-white shadow-lg' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Users className="w-4 h-4" /> SHADOWS
+            </button>
+            <button 
+              onClick={() => switchFaction('immortals')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all ${
+                faction === 'immortals' 
+                  ? 'bg-yellow-500 text-slate-950 shadow-lg' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Crown className="w-4 h-4" /> IMMORTALS
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Main Task List Area */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Tab Navigation */}
+          <div className="flex gap-4 border-b border-slate-900">
+            {['daily', 'weekly', 'monthly'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative ${
+                  activeTab === tab 
+                    ? 'text-white' 
+                    : 'text-slate-600 hover:text-slate-400'
+                }`}
+              >
+                {tab}
+                {activeTab === tab && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-red-600 rounded-t-full"></div>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Scrollable Task List */}
+          <div className="space-y-3 pb-20">
+            {activeTasksList.length > 0 ? (
+              activeTasksList.map((task) => (
+                <div key={task.id} className="group">
+                  <div 
+                    onClick={() => toggleTask(task.id)}
+                    className={`flex items-center gap-4 p-5 rounded-2xl border transition-all cursor-pointer ${
+                      completedTasks[task.id] 
+                        ? 'bg-slate-900/30 border-slate-900 opacity-40 grayscale' 
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-600 hover:bg-slate-800/40 shadow-xl'
+                    }`}
+                  >
+                    <div className="flex-shrink-0">
+                      {completedTasks[task.id] ? (
+                        <CheckCircle2 className="w-8 h-8 text-green-500" />
+                      ) : (
+                        <Circle className="w-8 h-8 text-slate-700 group-hover:text-slate-500" />
+                      )}
+                    </div>
+                    <div className="flex-grow">
+                      <div className="flex items-center gap-2">
+                        {task.icon}
+                        <h3 className={`text-lg font-bold tracking-tight ${completedTasks[task.id] ? 'line-through text-slate-600' : 'text-slate-100'}`}>
+                          {task.title}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-slate-500 font-medium">{task.desc}</p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 transition-transform group-hover:translate-x-1 ${completedTasks[task.id] ? 'text-slate-800' : 'text-slate-700'}`} />
+                  </div>
+                  
+                  {/* Extension for Daily Chest */}
+                  {task.isSpecial && !completedTasks[task.id] && (
+                    <div className="mt-3 ml-12 p-4 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-slate-950 px-4 py-2 rounded-lg text-sm font-mono text-orange-400 border border-slate-800 select-all">
+                          {task.code}
+                        </div>
+                        <button 
+                          onClick={(e) => handleCopyCode(e, task.code)}
+                          className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-white uppercase tracking-wider"
+                        >
+                          <Copy className="w-4 h-4" /> Copy
+                        </button>
+                      </div>
+                      <a 
+                        href={task.link} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-sm font-bold text-blue-500 hover:text-blue-400 underline flex items-center gap-1 px-4 py-2 rounded-xl hover:bg-blue-500/10 transition-all"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Claim on Web Shop <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-20 text-slate-700 font-bold uppercase tracking-widest italic">
+                No tasks available for this period.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="lg:col-span-4 space-y-8">
+          {/* Active Events Tracking */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl">
+            <h2 className="text-xl font-black mb-4 flex items-center gap-3">
+              <Zap className="w-6 h-6 text-yellow-500" />
+              LIVE EVENTS
+            </h2>
+            <div className="space-y-4">
+              {/* Goblins Event - Live until March 12 */}
+              <div 
+                onClick={() => toggleTask('event_goblins')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${completedTasks['event_goblins'] ? 'bg-slate-950 border-slate-900 opacity-50' : 'bg-slate-800/50 border-orange-900/40 hover:border-orange-500'}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-orange-500">Gilded Goblins</span>
+                  {completedTasks['event_goblins'] && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </div>
+                <div className="text-sm font-bold text-slate-200">Hunt Goblin variants</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">Ends March 12</div>
+              </div>
+
+              {/* Phantom Gallery - Recurring */}
+              <div 
+                onClick={() => toggleTask('event_phantom')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${completedTasks['event_phantom'] ? 'bg-slate-950 border-slate-900 opacity-50' : 'bg-slate-800/50 border-purple-900/40 hover:border-purple-500'}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-purple-500">Phantom Gallery</span>
+                  {completedTasks['event_phantom'] && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </div>
+                <div className="text-sm font-bold text-slate-200">Draw for cosmetics</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">Check In-Game Reset</div>
+              </div>
+
+              {/* Mirrored Jewels - Recurring */}
+              <div 
+                onClick={() => toggleTask('event_mirrored')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${completedTasks['event_mirrored'] ? 'bg-slate-950 border-slate-900 opacity-50' : 'bg-slate-800/50 border-cyan-900/40 hover:border-cyan-500'}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-cyan-500">Mirrored Jewels</span>
+                  {completedTasks['event_mirrored'] && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </div>
+                <div className="text-sm font-bold text-slate-200">Double Gem Drops</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">Save 10 Crests</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar Widget */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl">
+            <h2 className="text-xl font-black mb-6 flex items-center gap-3">
+              <Calendar className="w-6 h-6 text-red-500" />
+              UPCOMING
+            </h2>
+            <div className="space-y-6">
+              {calendarEvents.map((ev, i) => (
+                <div key={i} className="relative pl-6 border-l-2 border-slate-800 group hover:border-red-500 transition-colors">
+                  <div className="text-xs text-slate-500 font-black uppercase tracking-widest mb-1">
+                    {new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
+                  <div className="text-md font-bold text-slate-100">{ev.title}</div>
+                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter text-white ${ev.color}`}>
+                    {ev.type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Battleground Quick Look */}
+          <div className="bg-gradient-to-br from-red-950/40 to-slate-900 p-6 rounded-3xl border border-red-900/30 shadow-xl">
+            <h3 className="text-sm font-black text-red-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Swords className="w-4 h-4" /> PVP WINDOWS
+            </h3>
+            <div className="space-y-2 text-slate-400 text-xs font-bold font-mono">
+              <div className="flex justify-between border-b border-red-900/20 pb-1"><span>Morning:</span><span className="text-white">08:00 - 10:00</span></div>
+              <div className="flex justify-between border-b border-red-900/20 pb-1"><span>Mid-Day:</span><span className="text-white">12:00 - 14:00</span></div>
+              <div className="flex justify-between border-b border-red-900/20 pb-1"><span>Evening:</span><span className="text-white">18:00 - 20:00</span></div>
+              <div className="flex justify-between"><span>Night:</span><span className="text-white">22:00 - 00:00</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Ap
